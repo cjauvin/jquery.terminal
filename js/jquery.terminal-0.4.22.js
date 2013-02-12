@@ -1291,6 +1291,11 @@
         }
         $(object).keypress(function(e) {
             var result;
+            // FF keypress/keydown bug
+            if (self.keypress_blocked === true) {
+                self.keypress_blocked = false;
+                return false;
+            }
             if (e.ctrlKey && e.which === 99) {
                 return true;
             }
@@ -1831,7 +1836,8 @@
         function scroll_to_bottom() {
             var scrollHeight = self.prop ? self.prop('scrollHeight') :
                 self.attr('scrollHeight');
-            self.scrollTop(scrollHeight);
+            //self.scrollTop(scrollHeight);
+            $(document).scrollTop(scrollHeight);
         }
 
         function draw_line(string) {
@@ -2065,6 +2071,12 @@
                     return self;
                 } else {
                     throw "insert function argument is not a string";
+                }
+            },
+            // FF keypress/keydown bug
+            consumeSingleKeypress: function() {
+                if ($.browser.mozilla) {
+                    command_line.keypress_blocked = true;
                 }
             },
             set_prompt: function(prompt) {
