@@ -684,10 +684,12 @@
         var mask = options.mask || false;
         var command = '';
         var position = 0;
+        var relative_position = 0;
         var prompt;
         var enabled = options.enabled;
         var name, history;
         var cursor = self.find('.cursor');
+        var autocomplete_words = [];
 
         function blink(i) {
             cursor.toggleClass('inverted');
@@ -748,7 +750,7 @@
         var redraw = (function(self) {
             var before = cursor.prev();
             var after = cursor.next();
-            function draw_cursor_line(string, position) {
+            function draw_cursor_line(string, position, autocomplete) {
                 var len = string.length;
                 if (position === len) {
                     before.html($.terminal.encode(string));
@@ -766,11 +768,19 @@
                     //fix for tilda in IE
                     var c = string.slice(position, position + 1);
                     //cursor.html(string[position]));
-                    cursor.html(c === ' ' ? '&nbsp;' : $.terminal.encode(c));
+                    if (autocomplete) {
+                        cursor.html(c === ' ' ? '&nbsp;' : '<span class="word-completion">' + $.terminal.encode(c) + '</span>');
+                    } else {
+                        cursor.html(c === ' ' ? '&nbsp;' : $.terminal.encode(c));
+                    }
                     if (position === string.length - 1) {
                         after.html('');
                     } else {
-                        after.html($.terminal.encode(string.slice(position + 1)));
+                        if (autocomplete) {
+                            after.html('<span class="word-completion">' + $.terminal.encode(string.slice(position + 1)) + '</span>');
+                        } else {
+                            after.html($.terminal.encode(string.slice(position + 1)));
+                        }
                     }
                 }
             }
@@ -790,7 +800,7 @@
                 });
             }
             var count = 0;
-            return function() {
+            return function(autocomplete) {
                 var string = mask ? command.replace(/./g, '*') : command;
                 var i, first_len;
                 self.find('div').remove();
@@ -906,7 +916,7 @@
                          cursor.html('&nbsp;');
                          after.html('');
                      } else {
-                         draw_cursor_line(string, position);
+                         draw_cursor_line(string, position, autocomplete);
                      }
                 }
             };
@@ -970,6 +980,7 @@
                     }
                     return true;
                 } else if (e.keyCode === 13) { //enter
+                    self.remove_word_completion();
                     if ((history && command) &&
                         ((options.historyFilter &&
                          options.historyFilter(command)) ||
@@ -979,6 +990,7 @@
                         }
                     }
                     history.last();
+                    // !!!
                     var tmp = command;
                     self.set('');
                     if (options.commands) {
@@ -992,7 +1004,9 @@
                         reverse_search_string += ' ';
                         draw_reverse_prompt();
                     } else {
-                        self.insert(' ');
+                        // !!!
+                        self.remove_word_completion();
+                        self.insert(' ', false, false);
                     }
                 } else if (e.which === 8) { //backspace
                     if (reverse_search) {
@@ -1000,6 +1014,8 @@
                         draw_reverse_prompt();
                     } else {
                         if (command !== '' && position > 0) {
+                            // !!!
+                            self.remove_word_completion();
                             command = command.slice(0, position - 1) +
                                 command.slice(position, command.length);
                             --position;
@@ -1007,22 +1023,41 @@
                         }
                     }
                 } else if (e.which === 9 && !(e.ctrlKey || e.altKey)) { // TAB
-                    self.insert('\t');
+                    //self.insert('\t');
+
+                    // !!!
+                    var elem = self.find('.word-completion');
+                    if (elem.length == 2) {
+                        var word_completion = $(elem[0]).html() + $(elem[1]).html();
+                    } else {
+                        var word_completion = $(elem).html();
+                    }
+                    if (word_completion) {
+                        self.remove_word_completion();
+                        self.insert(word_completion);
+                    }
+
                 } else if (e.which === 46) {
                     //DELETE
                     if (command !== '' && position < command.length) {
+                        self.remove_word_completion();
                         command = command.slice(0, position) +
                             command.slice(position + 1, command.length);
+                        if (relative_position < 0) {
+                            relative_position++;
+                        }
                         redraw();
                     }
                     return true;
                 } else if (history && e.which === 38 ||
                            (e.which === 80 && e.ctrlKey)) {
                     //UP ARROW or CTRL+P
+                    relative_position = 0;
                     self.set(history.previous());
                 } else if (history && e.which === 40 ||
                            (e.which === 78 && e.ctrlKey)) {
                     //DOWN ARROW or CTRL+N
+                    relative_position = 0;
                     self.set(history.next());
                 } else if (e.which === 37 ||
                            (e.which === 66 && e.ctrlKey)) {
@@ -1046,7 +1081,10 @@
                     } else {
                         //LEFT ARROW or CTRL+B
                         if (position > 0) {
+                            --relative_position;
                             --position;
+                            // !!!
+                            self.remove_word_completion();
                             redraw();
                         }
                     }
@@ -1083,18 +1121,26 @@
                         }
                         redraw();
                     } else {
-                        if (position < command.length) {
+                        if (position < command.length && relative_position < 0) {
+                            ++relative_position;
                             ++position;
+                            // !!!
+                            self.remove_word_completion();
                             redraw();
                         }
                     }
                 } else if (e.which === 123) { //F12 - Allow Firebug
                     return true;
                 } else if (e.which === 36) { //HOME
+                    // !!!
+                    relative_position -= position;
+                    self.remove_word_completion();
                     self.position(0);
                 } else if (e.which === 35) {
                     //END
+                    relative_position = 0;
                     self.position(command.length);
+                    //self.redraw();
                 } else if (e.ctrlKey || e.metaKey) {
                     if (e.shiftKey) { // CTRL+SHIFT+??
                         if (e.which === 84) {
@@ -1106,9 +1152,13 @@
                         //NOTE: in opera charCode is undefined
                         if (e.which === 65) {
                             //CTRL+A
+                            // !!!
+                            relative_position -= position;
+                            self.remove_word_completion();
                             self.position(0);
                         } else if (e.which === 69) {
                             //CTRL+E
+                            relative_position = 0;
                             self.position(command.length);
                         } else if (e.which === 88 || e.which === 67 ||
                                    e.which === 87 || e.which === 84) {
@@ -1125,6 +1175,8 @@
                             } else if (position !== command.length) {
                                 self.set(command.slice(0, position));
                             }
+                            // !!!
+                            relative_position = 0;
                         } else if (e.which === 85) { // CTRL+U
                             self.set(command.slice(position, command.length));
                             self.position(0);
@@ -1170,7 +1222,13 @@
                     }
                 }
             },
-            insert: function(string, stay) {
+            insert: function(string, stay, autocomplete) {
+                // !!!
+                if (relative_position !== 0) {
+                    self.remove_word_completion();
+                    autocomplete = false;
+                }
+
                 if (position === command.length) {
                     command += string;
                 } else if (position === 0) {
@@ -1182,11 +1240,47 @@
                 if (!stay) {
                     position += string.length;
                 }
-                redraw();
+                redraw(autocomplete); // !!! important for cutting wp when wrong prefix
                 if (typeof options.onCommandChange === 'function') {
                     options.onCommandChange(command);
                 }
             },
+
+            // !!!
+            remove_word_completion: function() {
+                var cursor = self.find('.cursor');
+                self.find('.word-completion').remove();
+                var right = cursor.html() + cursor.next().html();
+                right = (right === '&nbsp;') ? '' : right;
+                command = cursor.prev().html() + right; // cursor.html() + cursor.next().html();
+                command = command.replace(/&nbsp;/g, ' ');
+            },
+
+            // !!!
+            complete_word: function() {
+                if (relative_position !== 0) {
+                    self.remove_word_completion();
+                    return;
+                }
+                var cursor = self.find('.cursor'),
+                found = false;
+                $.each(self.autocomplete_words, function(i, word) {
+                    var tokens = cursor.prev().html().split(/&nbsp;/),
+                    prefix = tokens[tokens.length - 1];
+                    if (prefix.length > 2 && word.match(new RegExp("^" + prefix, 'i'))) {
+                        var word_completion = word.substring(prefix.length);
+                        command = command.slice(0, position) + word_completion;
+                        redraw(true);
+                        found = true;
+                        return false;
+                    }
+                });
+                if (!found) {
+                    self.remove_word_completion();
+                    cursor.html('&nbsp;');
+                }
+            },
+
             get: function() {
                 return command;
             },
@@ -1316,7 +1410,9 @@
                             draw_reverse_prompt();
                             reverse_history_search();
                         } else {
-                            self.insert(String.fromCharCode(e.which));
+                            // !!!
+                            self.insert(String.fromCharCode(e.which), false, true); // autocomplete=true
+                            self.complete_word();
                         }
                         return false;
                     } else if (e.altKey) {
@@ -2092,6 +2188,12 @@
                 }
                 return self;
             },
+
+            // !!!
+            set_autocomplete_words: function(words) {
+                command_line.autocomplete_words = words;
+            },
+
             get_prompt: function() {
                 return interpreters.top().prompt;
                 // command_line.prompt(); - can be a wrapper
