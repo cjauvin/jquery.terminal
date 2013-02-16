@@ -1264,7 +1264,7 @@
                 }
                 var cursor = self.find('.cursor'),
                 found = false;
-                $.each(self.autocomplete_words, function(i, word) {
+                $.each(self.autocomplete_words || [], function(i, word) {
                     var tokens = cursor.prev().html().split(/&nbsp;/),
                     prefix = tokens[tokens.length - 1];
                     if (prefix.length > 2 && word.match(new RegExp("^" + prefix, 'i'))) {
