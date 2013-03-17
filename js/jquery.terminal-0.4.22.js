@@ -1267,7 +1267,7 @@
                 $.each(self.autocomplete_words, function(i, word) {
                     var tokens = cursor.prev().html().split(/&nbsp;/),
                     prefix = tokens[tokens.length - 1];
-                    if (prefix.length > 2 && word.match(new RegExp("^" + prefix, 'i'))) {
+                    if (prefix.length > 1 && word.match(new RegExp("^" + prefix, 'i'))) {
                         var word_completion = word.substring(prefix.length);
                         command = command.slice(0, position) + word_completion;
                         redraw(true);
